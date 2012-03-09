@@ -1,0 +1,10 @@
+name = "Rabbit Hole"
+description = "Will redirect the user to a different place when viewing a full node."
+core = 7.x
+
+; Information added by drupal.org packaging script on 2012-03-09
+version = "7.x-1.1+1-dev"
+core = "7.x"
+project = "rabbit_hole"
+datestamp = "1331296777"
+
