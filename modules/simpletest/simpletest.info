@@ -27,6 +27,7 @@ files[] = tests/lock.test
 files[] = tests/mail.test
 files[] = tests/menu.test
 files[] = tests/module.test
+files[] = tests/pager.test
 files[] = tests/password.test
 files[] = tests/path.test
 files[] = tests/registry.test
@@ -50,8 +51,8 @@ files[] = tests/upgrade/update.trigger.test
 files[] = tests/upgrade/upgrade.upload.test
 files[] = tests/upgrade/upgrade.user.test
 
-; Information added by drupal.org packaging script on 2012-03-09
-version = "7.12+98-dev"
+; Information added by drupal.org packaging script on 2012-03-14
+version = "7.12+118-dev"
 project = "drupal"
-datestamp = "1331295247"
+datestamp = "1331683892"
 

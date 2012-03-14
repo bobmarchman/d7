@@ -5,9 +5,9 @@ files[] = entity_token.tokens.inc
 files[] = entity_token.module
 dependencies[] = entity
 
-; Information added by drupal.org packaging script on 2012-02-28
-version = "7.x-1.0-rc1+42-dev"
+; Information added by drupal.org packaging script on 2012-03-13
+version = "7.x-1.0-rc1+43-dev"
 core = "7.x"
 project = "entity"
-datestamp = "1330388005"
+datestamp = "1331597609"
 
