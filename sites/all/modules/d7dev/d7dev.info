@@ -1,0 +1,6 @@
+name = D7 Dev
+description = D7 Development Module for Testing
+package = Development
+core = 7.x
+tags[] = developer
+version = 7.x-1.x-dev
