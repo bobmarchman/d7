@@ -197,18 +197,16 @@ function rabbit_hole_form_node_form_alter(&$form, $form_state) {
  * @see node_form_submit().
  */
 function rabbit_hole_node_form_submit($form, &$form_state) {
-  $node = $form['#node'];
-
   // Get the action. Either the one specified for this node, or the default
   // value for the content type.
-  $action = $form_state['values']['rabbit_hole_action'] != RABBIT_HOLE_USE_DEFAULT ? $form_state['values']['rabbit_hole_action'] : variable_get('rabbit_hole_action_' . $node->type);
+  $action = $form_state['values']['rabbit_hole_action'] != RABBIT_HOLE_USE_DEFAULT ? $form_state['values']['rabbit_hole_action'] : variable_get('rabbit_hole_action_' . $form_state['values']['type']);
 
   // If the action says anything else than to display the content, make sure
   // the user lands on the edit page. For some reason, setting the redirect to
   // FALSE doesn't work. The user won't be able to edit the node straight away
   // after the page has reloaded. But redirecting to /edit will work.
   if ($action != RABBIT_HOLE_DISPLAY_CONTENT) {
-    $form_state['redirect'] = 'node/' . $node->nid . '/edit';
+    $form_state['redirect'] = 'node/' . $form_state['values']['nid'] . '/edit';
   }
 }
 
@@ -226,9 +224,19 @@ function rabbit_hole_node_view($node, $view_mode, $langcode) {
   // default value for the content type.
   $action = isset($node->rabbit_hole_action) ? ($node->rabbit_hole_action != RABBIT_HOLE_USE_DEFAULT ? $node->rabbit_hole_action : variable_get('rabbit_hole_action_' . $node->type)) : variable_get('rabbit_hole_action_' . $node->type);
 
-  // Get the redirect path and response in the same manner.
-  $redirect_path = isset($node->rabbit_hole_redirect) ? token_replace($node->rabbit_hole_redirect, array('node' => $node)) : token_replace(variable_get('rabbit_hole_redirect_' . $node->type, '<front>'), array('node' => $node));
-  $redirect_response = isset($node->rabbit_hole_redirect_response) ? $node->rabbit_hole_redirect_response : variable_get('rabbit_hole_redirect_response_' . $node->type, RABBIT_HOLE_PAGE_REDIRECT_RESPONSE_DEFAULT);
+  // If we should perform a redirect, we will also get the path and response.
+  if ($action == RABBIT_HOLE_PAGE_REDIRECT) {
+    if (isset($node->rabbit_hole_action) && $node->rabbit_hole_action != RABBIT_HOLE_USE_DEFAULT) {
+      // Get the redirect path and response from the node.
+      $redirect_path = token_replace($node->rabbit_hole_redirect, array('node' => $node));
+      $redirect_response = $node->rabbit_hole_redirect_response;
+    }
+    else {
+      // Get the redirect path and response from the content type.
+      $redirect_path = token_replace(variable_get('rabbit_hole_redirect_' . $node->type, '<front>'), array('node' => $node));
+      $redirect_response = variable_get('rabbit_hole_redirect_response_' . $node->type, RABBIT_HOLE_PAGE_REDIRECT_RESPONSE_DEFAULT);
+    }
+  }
 
   // Now, let's see what we should do.
   switch ($action) {
