@@ -7,8 +7,8 @@ version = VERSION
 core = 7.x
 hidden = TRUE
 
-; Information added by drupal.org packaging script on 2012-03-20
-version = "7.12+124-dev"
+; Information added by drupal.org packaging script on 2012-03-22
+version = "7.12+125-dev"
 project = "drupal"
-datestamp = "1332202362"
+datestamp = "1332375156"
 
