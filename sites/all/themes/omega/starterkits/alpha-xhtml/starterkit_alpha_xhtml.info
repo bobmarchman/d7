@@ -174,9 +174,9 @@ settings[alpha_region_footer_weight] = '1'
 settings[alpha_region_footer_weight] = '1'
 settings[alpha_region_footer_css] = ''
 
-; Information added by drupal.org packaging script on 2012-02-23
-version = "7.x-3.1+1-dev"
+; Information added by drupal.org packaging script on 2012-04-10
+version = "7.x-3.1+4-dev"
 core = "7.x"
 project = "omega"
-datestamp = "1329957929"
+datestamp = "1334061313"
 

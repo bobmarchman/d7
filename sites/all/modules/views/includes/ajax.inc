@@ -25,8 +25,6 @@ function views_ajax() {
 
     $commands = array();
 
-    $arg = explode('/', $_REQUEST['view_path']);
-
     // Remove all of this stuff from $_GET so it doesn't end up in pagers and tablesort URLs.
     foreach (array('view_name', 'view_display_id', 'view_args', 'view_path', 'view_dom_id', 'pager_element', 'view_base_path', 'ajax_html_ids', 'ajax_page_state') as $key) {
       if (isset($_GET[$key])) {
@@ -50,7 +48,7 @@ function views_ajax() {
 
       // Add all $_POST data, because AJAX is always a post and many things,
       // such as tablesorts, exposed filters and paging assume $_GET.
-      $_GET += $_POST;
+      $_GET = $_POST + $_GET;
 
       // Overwrite the destination.
       // @see drupal_get_destination()

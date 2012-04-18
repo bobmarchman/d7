@@ -468,8 +468,8 @@ function template_preprocess_views_view_table(&$vars) {
   $options  = $view->style_plugin->options;
   $handler  = $view->style_plugin;
 
-  $default_row_class = $handler->options['default_row_class'];
-  $row_class_special = $handler->options['row_class_special'];
+  $default_row_class = isset($options['default_row_class']) ? $options['default_row_class'] : TRUE;
+  $row_class_special = isset($options['row_class_special']) ? $options['row_class_special'] : TRUE;
 
   $fields   = &$view->field;
   $columns  = $handler->sanitize_columns($options['columns'], $fields);
@@ -533,6 +533,10 @@ function template_preprocess_views_view_table(&$vars) {
           $vars['header_classes'][$field] .= ' ';
         }
         $vars['header_classes'][$field] .= $class;
+      }
+      // Add a CSS align class to each field if one was set
+      if (!empty($options['info'][$field]['align'])) {
+        $vars['header_classes'][$field] .= ' ' . drupal_clean_css_identifier($options['info'][$field]['align']);
       }
 
       // Add a header label wrapper if one was selected.
@@ -607,6 +611,11 @@ function template_preprocess_views_view_table(&$vars) {
     }
   }
 
+  // Hide table header if all labels are empty.
+  if (!array_filter($vars['header'])) {
+    $vars['header'] = array();
+  }
+
   $count = 0;
   foreach ($vars['rows'] as $num => $row) {
     if ($row_class_special) {
@@ -650,8 +659,8 @@ function template_preprocess_views_view_grid(&$vars) {
   $result   = $view->result;
   $options  = $view->style_plugin->options;
   $handler  = $view->style_plugin;
-  $default_row_class = $handler->options['default_row_class'];
-  $row_class_special = $handler->options['row_class_special'];
+  $default_row_class = isset($options['default_row_class']) ? $options['default_row_class'] : TRUE;
+  $row_class_special = isset($options['row_class_special']) ? $options['row_class_special'] : TRUE;
 
   $columns  = $options['columns'];
 
@@ -677,7 +686,7 @@ function template_preprocess_views_view_grid(&$vars) {
     }
     if ($row) {
       // Fill up the last line only if it's configured, but this is default.
-      if (!empty($handler->options['fill_single_line']) || count($rows)) {
+      if (!empty($handler->options['fill_single_line']) && count($rows)) {
         for ($i = 0; $i < ($columns - $col_count); $i++) {
           $row[] = '';
         }
@@ -762,11 +771,12 @@ function template_preprocess_views_view_unformatted(&$vars) {
   $view = $vars['view'];
   $rows = $vars['rows'];
   $style = $view->style_plugin;
+  $options = $style->options;
 
   $vars['classes_array'] = array();
   $vars['classes'] = array();
-  $default_row_class = $style->options['default_row_class'];
-  $row_class_special = $style->options['row_class_special'];
+  $default_row_class = isset($options['default_row_class']) ? $options['default_row_class'] : FALSE;
+  $row_class_special = isset($options['row_class_special']) ? $options['row_class_special'] : FALSE;
   // Set up striping values.
   $count = 0;
   $max = count($rows);
@@ -791,7 +801,7 @@ function template_preprocess_views_view_unformatted(&$vars) {
     }
 
     // Flatten the classes to a string for each row for the template file.
-    $vars['classes_array'][$id] = implode(' ', $vars['classes'][$id]);
+    $vars['classes_array'][$id] = isset($vars['classes'][$id]) ? implode(' ', $vars['classes'][$id]) : '';
   }
 }
 
@@ -927,7 +937,7 @@ function template_preprocess_views_exposed_form(&$vars) {
 
     $widget->id = isset($form[$info['value']]['#id']) ? $form[$info['value']]['#id'] : '';
     if (!empty($info['label'])) {
-      $widget->label = $info['label'];
+      $widget->label = check_plain($info['label']);
     }
     if (!empty($info['operator'])) {
       $widget->operator = drupal_render($form[$info['operator']]);

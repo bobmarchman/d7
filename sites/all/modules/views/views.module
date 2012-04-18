@@ -454,13 +454,21 @@ function views_arg_load($value, $name, $display_id, $index) {
 }
 
 /**
- * Page callback entry point; requires a view and a display id, then
- * passes control to the display handler.
+ * Page callback: Displays a page view, given a name and display id.
+ *
+ * @param $name
+ *   The name of a view.
+ * @param $display_id
+ *   The display id of a view.
+ *
+ * @return
+ *   Either the HTML of a fully-executed view, or MENU_NOT_FOUND.
  */
-function views_page() {
+function views_page($name, $display_id) {
   $args = func_get_args();
-  $name = array_shift($args);
-  $display_id = array_shift($args);
+  // Remove $name and $display_id from the arguments.
+  array_shift($args);
+  array_shift($args);
 
   // Load the view and render it.
   if ($view = views_get_view($name)) {
@@ -468,7 +476,7 @@ function views_page() {
   }
 
   // Fallback; if we get here no view was found or handler was not valid.
-  return drupal_not_found();
+  return MENU_NOT_FOUND;
 }
 
 /**
@@ -1900,7 +1908,7 @@ function views_exposed_form($form, &$form_state) {
     '#id' => drupal_html_id('edit-submit-' . $view->name),
   );
 
-  $form['#action'] = url($view->get_url());
+  $form['#action'] = url($view->display_handler->get_url());
   $form['#theme'] = views_theme_functions('views_exposed_form', $view, $display);
   $form['#id'] = drupal_clean_css_identifier('views_exposed_form-' . check_plain($view->name) . '-' . check_plain($display->id));
 //  $form['#attributes']['class'] = array('views-exposed-form');

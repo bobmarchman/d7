@@ -18,9 +18,9 @@ files[] = theme/theme.inc
 files[] = theme/calendar-style.tpl.php
 files[] = theme/calendar-row-node.tpl.php
 
-; Information added by drupal.org packaging script on 2012-03-14
-version = "7.x-3.0+5-dev"
+; Information added by drupal.org packaging script on 2012-04-18
+version = "7.x-3.0+32-dev"
 core = "7.x"
 project = "calendar"
-datestamp = "1331683562"
+datestamp = "1334750772"
 

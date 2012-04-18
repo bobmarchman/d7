@@ -1122,6 +1122,9 @@ class view extends views_db_object {
     if (!empty($this->build_info['fail'])) {
       return;
     }
+    if (!empty($this->view->build_info['denied'])) {
+      return;
+    }
 
     drupal_theme_initialize();
 
@@ -1173,7 +1176,13 @@ class view extends views_db_object {
         $function($this);
       }
 
-      // Let the theme play too, because pre render is a very themey thing.
+      // Let the themes play too, because pre render is a very themey thing.
+      foreach ($GLOBALS['base_theme_info'] as $base) {
+        $function = $base->name . '_views_pre_render';
+        if (function_exists($function)) {
+          $function($this);
+        }
+      }
       $function = $GLOBALS['theme'] . '_views_pre_render';
       if (function_exists($function)) {
         $function($this);
@@ -1197,7 +1206,13 @@ class view extends views_db_object {
       $function($this, $this->display_handler->output, $cache);
     }
 
-    // Let the theme play too, because post render is a very themey thing.
+    // Let the themes play too, because post render is a very themey thing.
+    foreach ($GLOBALS['base_theme_info'] as $base) {
+      $function = $base->name . '_views_post_render';
+      if (function_exists($function)) {
+        $function($this);
+      }
+    }
     $function = $GLOBALS['theme'] . '_views_post_render';
     if (function_exists($function)) {
       $function($this, $this->display_handler->output, $cache);
@@ -1713,21 +1728,30 @@ class view extends views_db_object {
       $this->vid = NULL;
     }
 
-    // If we have no vid or our vid is a string, this is a new view.
-    if (!empty($this->vid)) {
-      // remove existing table entries
+    $transaction = db_transaction();
+
+    try {
+      // If we have no vid or our vid is a string, this is a new view.
+      if (!empty($this->vid)) {
+        // remove existing table entries
+        foreach ($this->db_objects() as $key) {
+          db_delete('views_' . $key)
+            ->condition('vid', $this->vid)
+            ->execute();
+        }
+      }
+
+      $this->save_row(!empty($this->vid) ? 'vid' : FALSE);
+
+      // Save all of our subtables.
       foreach ($this->db_objects() as $key) {
-        db_delete('views_' . $key)
-          ->condition('vid', $this->vid)
-          ->execute();
+        $this->_save_rows($key);
       }
     }
-
-    $this->save_row(!empty($this->vid) ? 'vid' : FALSE);
-
-    // Save all of our subtables.
-    foreach ($this->db_objects() as $key) {
-      $this->_save_rows($key);
+    catch (Exception $e) {
+      $transaction->rollback();
+      watchdog_exception('views', $e);
+      throw $e;
     }
 
     $this->save_locale_strings();
@@ -2141,7 +2165,7 @@ class views_db_object {
     }
     $schema = drupal_get_schema($this->db_table);
 
-    $output = $indent . '$' . $identifier . ' = new ' . get_class($this) . ";\n";
+    $output = $indent . '$' . $identifier . ' = new ' . get_class($this) . "();\n";
     // Go through our schema and build correlations.
     foreach ($schema['fields'] as $field => $info) {
       if (!empty($info['no export'])) {
