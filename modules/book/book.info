@@ -7,8 +7,8 @@ files[] = book.test
 configure = admin/content/book/settings
 stylesheets[all][] = book.css
 
-; Information added by drupal.org packaging script on 2012-04-18
-version = "7.12+171-dev"
+; Information added by drupal.org packaging script on 2012-05-01
+version = "7.12+212-dev"
 project = "drupal"
-datestamp = "1334708079"
+datestamp = "1335874308"
 
