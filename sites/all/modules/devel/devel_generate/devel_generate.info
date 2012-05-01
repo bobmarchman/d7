@@ -6,9 +6,9 @@ dependencies[] = devel
 tags[] = developer
 configure = admin/config/development/generate
 
-; Information added by drupal.org packaging script on 2012-04-14
-version = "7.x-1.2+32-dev"
+; Information added by drupal.org packaging script on 2012-04-30
+version = "7.x-1.2+33-dev"
 core = "7.x"
 project = "devel"
-datestamp = "1334362289"
+datestamp = "1335744582"
 

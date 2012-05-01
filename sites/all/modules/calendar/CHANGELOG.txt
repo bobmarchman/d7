@@ -5,6 +5,40 @@ Calendar Module 7.x
 Version 7.x-3.x-dev
 ===================
 
+======================
+Version 7.x-3.3
+======================
+
+NEW FEATURES:
+- An option to add Colorbox settings to the calendar template has been added to admin/config/date/calendar. 
+- The template has been updated to add the Colorbox settings if the option to use them has been selected and Colorbox is enabled.
+- The theming has been altered a bit to make sure that you can display a rendered entity in a Colorbox field.
+- A new calendar style option has been added to choose fields to exclude from multi-day rows, so multi-day rows can be set up to display only the Colorbox picker.
+
+BUGFIXES:
+
+- Delete all the code used to remove default calendars, no longer needed now that the default calendar has been removed.
+- Issue #1543930 by johnv, Fix taxonomy stripe settings so they don't depend on formatter.
+- Move session tracking option to be a global option instead of a per-display option.
+- Issue #1551112, Make sure items without colors don't show up in the legend.
+- Issue #1545240, Don't try to set the date link if there is no link_display set.
+- Issue #1291768, Document caching options and add default caching to the templates.
+- Issue #1541938, Fix error when displaying the week number.
+- Issue #1550836, Fix logic error in overlapping week view that was keeping the overlap classes from getting set.
+- Style tweaks, make the day window bigger by not ending it at the bottom of the browser screen.
+
+======================
+Version 7.x-3.2
+======================
+
+Please read the notes for the 3.1 release as well.
+
+- Issue #1537598, Fix misc errors in day display caused when some items were not getting rendered due to a badly placed 'continue' in the loop.
+
+======================
+Version 7.x-3.1
+======================
+
 DEPRECATED ELEMENTS:
 
 - The default calendar has been removed. If you have calendars created with the old default calendar you should re-create them using the new template.
@@ -13,6 +47,7 @@ DEPRECATED ELEMENTS:
 
 
 NEW FEATURES:
+- The legend block has been reworked to eliminate storing stripes in $GLOBALS, making it cacheable. A new configuration option sets the view that is used for the stipe options.
 - Add the headers attribute to multiday calendar tables for html5 compliance and accessibility.
 - Issue #1535346, Rework the calendar tab handling to get rid of custom tabs and add in a setting to track the current date.
 - Issue #1535346 continuation, rework the current date tracking to use the new date_default_argument_alter hook.
@@ -32,6 +67,9 @@ If you have an existing calendar you can add the menu tabs and turn on the date 
 
 BUGFIXES:
 
+- Issue #1397986, Fix Undefined index groupby_times.
+- Issue #1466698 by alex.neblett and johnv, Make sure that all available fields appear on the template, even when shared across entity types.
+- The group by field option was not working right, fix it.
 - The calendar legend block was appearing even if empty. Create the content earlier to keep that from happening.
 - Issue #1445228, Make sure calendar_granularity_paths works on a default view that is missing granularity (as from an export).
 - Fix the Date/Calendar link to link to the default display instead of the current display.

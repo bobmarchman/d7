@@ -7,9 +7,9 @@ dependencies[] = entity
 files[] = date_ical_plugin_row_ical_feed.inc
 files[] = date_ical_plugin_style_ical_feed.inc
 
-; Information added by drupal.org packaging script on 2012-02-29
-version = "7.x-1.0+2-dev"
+; Information added by drupal.org packaging script on 2012-04-19
+version = "7.x-1.1+0-dev"
 core = "7.x"
 project = "date_ical"
-datestamp = "1330474193"
+datestamp = "1334837429"
 

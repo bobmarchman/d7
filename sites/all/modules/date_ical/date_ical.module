@@ -36,7 +36,7 @@ function theme_date_ical_icon($variables) {
     'title' => t('Add to calendar'), t('Add to calendar'),
   );
   if ($image = theme('image', $variables)) {
-    return '<div style="text-align: right;"><a href="' . check_url($url) . '" class="ical-icon" title="ical">' . $image . '</a></div>';
+    return '<div class="feed_icon"><a href="' . check_url($url) . '" class="ical-icon" title="ical">' . $image . '</a></div>';
   }
 }
 
@@ -49,15 +49,28 @@ function theme_date_ical_icon($variables) {
  */
 function date_ical_preprocess_node(&$variables) {
   if (isset($variables['view_mode']) && $variables['view_mode'] == 'ical') {
+
     // We hide the page elements we won't want to see.
     // The display of the body and other fields will be controlled
     // by the Display Fields settings for the ical view mode.
-    $variables['title'] = '';
+
+    // Trick the default node template into not displaying the page title by telling it this is page.
+    $variables['page'] = TRUE;
     $variables['title_prefix'] = '';
     $variables['title_suffix'] = '';
+
+    // We probably don't want to see the author information in our feed.
     $variables['display_submitted'] = FALSE;
-    $variables['links'] = '';
-    $variables['comments'] = '';
+
+    // No comments in a feed.
+    if (isset($variables['content']['comments'])) {
+      unset($variables['content']['comments']);
+    }
+
+    // No links in a feed.
+    if (isset($variables['content']['links'])) {
+      unset($variables['content']['links']);
+    }
   }
 }
 
