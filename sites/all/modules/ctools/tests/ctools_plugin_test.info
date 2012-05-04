@@ -7,9 +7,9 @@ files[] = ctools.plugins.test
 files[] = object_cache.test
 hidden = TRUE
 
-; Information added by drupal.org packaging script on 2012-04-27
-version = "7.x-1.0+18-dev"
+; Information added by drupal.org packaging script on 2012-05-02
+version = "7.x-1.0+19-dev"
 core = "7.x"
 project = "ctools"
-datestamp = "1335485476"
+datestamp = "1335917431"
 
