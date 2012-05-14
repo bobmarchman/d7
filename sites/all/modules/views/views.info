@@ -70,6 +70,7 @@ files[] = modules/aggregator/views_handler_field_aggregator_item_description.inc
 files[] = modules/aggregator/views_handler_field_aggregator_xss.inc
 files[] = modules/aggregator/views_handler_filter_aggregator_category_cid.inc
 files[] = modules/aggregator/views_plugin_row_aggregator_rss.inc
+files[] = modules/book/views_plugin_argument_default_book_root.inc
 files[] = modules/comment/views_handler_argument_comment_user_uid.inc
 files[] = modules/comment/views_handler_field_comment.inc
 files[] = modules/comment/views_handler_field_comment_depth.inc
@@ -304,9 +305,9 @@ files[] = tests/views_cache.test
 files[] = tests/views_view.test
 files[] = tests/views_ui.test
 
-; Information added by drupal.org packaging script on 2012-05-04
-version = "7.x-3.3+122-dev"
+; Information added by drupal.org packaging script on 2012-05-11
+version = "7.x-3.3+128-dev"
 core = "7.x"
 project = "views"
-datestamp = "1336092513"
+datestamp = "1336697338"
 

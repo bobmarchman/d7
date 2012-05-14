@@ -54,8 +54,8 @@ files[] = tests/upgrade/upgrade.upload.test
 files[] = tests/upgrade/update.user.test
 files[] = tests/upgrade/upgrade.user.test
 
-; Information added by drupal.org packaging script on 2012-05-04
-version = "7.14+3-dev"
+; Information added by drupal.org packaging script on 2012-05-13
+version = "7.14+7-dev"
 project = "drupal"
-datestamp = "1336090266"
+datestamp = "1336911099"
 
