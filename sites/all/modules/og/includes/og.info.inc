@@ -15,6 +15,15 @@ class OgMembershipMetadataController extends EntityDefaultMetadataController {
     $info = parent::entityPropertyInfo();
     $properties = &$info[$this->type]['properties'];
 
+    // Initialize values to prevent WSOD, no certain cases of clear cache.
+    $properties = !empty($properties) ? $properties : array();
+    $properties += array(
+      'entity_type' => array(),
+      'group_type' => array(),
+      'field_name' => array(),
+      'language' => array(),
+    );
+
     // Group ID is provided in the "group" property.
     unset($properties['gid']);
     $properties['group'] = array(
@@ -72,6 +81,10 @@ class OgMembershipMetadataController extends EntityDefaultMetadataController {
       'setter callback' => 'entity_property_verbatim_set',
       // TODO: Add options list to give a list of group-audience fields.
       // 'options list' => '',
+    );
+
+    $properties['language'] += array(
+      'setter callback' => 'entity_property_verbatim_set',
     );
 
     return $info;

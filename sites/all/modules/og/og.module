@@ -7,17 +7,27 @@
 
 /**
  * Define active group content states.
+ *
+ * When a user has this membership state they are considered to be of
+ * "member" role.
  */
 define('OG_STATE_ACTIVE', 1);
 
 /**
- * Define pending group content states. The user is subscribed to the group but
- * isn't an active member yet.
+ * Define pending group content states. The user is subscribed to the group
+ * but isn't an active member yet.
+ *
+ * When a user has this membership state they are considered to be of
+ * "non-member" role.
  */
 define('OG_STATE_PENDING', 2);
 
 /**
  * Define blocked group content states. The user is rejected from the group.
+ *
+ * When a user has this membership state they are denided access to any
+ * group related action. This state, however, does not prevent user to
+ * access a group or group content node.
  */
 define('OG_STATE_BLOCKED', 3);
 
@@ -414,19 +424,6 @@ function og_default_og_membership_type() {
 }
 
 /**
- * Implements hook_modules_enabled().
- */
-function og_modules_enabled($modules) {
-  // Reset this cache first, since Drush can call this function multiple times
-  // before all modules are available.
-  drupal_static_reset('og_get_permissions');
-  foreach ($modules as $module) {
-    // Add default roles and permissions, if existing and not set yet.
-    og_set_global_access_by_module($module);
-  }
-}
-
-/**
  * Implements hook_modules_uninstalled().
  */
 function og_modules_uninstalled($modules) {
@@ -589,7 +586,6 @@ function og_field_access($op, $field, $entity_type, $entity, $account) {
   $field = field_info_field($field_name);
   $settings = $field['settings']['handler_settings'];
 
-
   // Check if we are editing the user entity, or need to hide a secondary
   // field.
   if ($entity_type == 'user' || (!empty($settings['primary_field']) && !empty($settings['hide_secondary_field']))) {
@@ -620,22 +616,24 @@ function og_field_create_instance($instance) {
     return;
   }
 
-  // Create global roles per entity-type per bundle.
-  og_roles_override($instance['entity_type'], 0, $instance['bundle']);
+  // Create default roles per entity-type per bundle.
+  og_roles_override($instance['entity_type'], $instance['bundle'], 0);
 
   // Check if we need to add a group audience on the user's entity.
+  // We add a different field, so each field can be set differently.
   if (!og_is_group_content_type('user', 'user')) {
     $og_field = og_fields_info(OG_AUDIENCE_FIELD);
     $og_field['field']['settings']['target_type'] = $instance['entity_type'];
     $og_field['instance']['label'] = t('Group membership');
-    og_create_field(OG_AUDIENCE_FIELD, 'user', 'user', $og_field);
+    og_create_field('og_user_group_ref', 'user', 'user', $og_field);
 
     // Create "Other groups" field.
     $og_field['instance']['label'] = t('Other groups');
     $og_field['instance']['widget']['type'] = 'entityreference_autocomplete';
     $og_field['field']['settings']['handler_settings']['reference_type'] = 'other_groups';
-    $og_field['field']['settings']['handler_settings']['primary_field'] = OG_AUDIENCE_FIELD;
-    og_create_field(OG_AUDIENCE_OTHER_GROUPS_FIELD, 'user', 'user', $og_field);
+    $og_field['field']['settings']['handler_settings']['primary_field'] = 'og_user_group_ref';
+    $og_field['field']['settings']['handler_settings']['hide_secondary_field'] = TRUE;
+    og_create_field('og_other_user_group_ref', 'user', 'user', $og_field);
   }
 }
 
@@ -654,12 +652,97 @@ function og_field_delete_instance($instance) {
     return;
   }
 
-  // Get the global roles.
-  $roles = og_roles($instance['entity_type'], 0, $instance['bundle']);
+  // Get the per-bundle roles.
+  $roles = og_roles($instance['entity_type'], $instance['bundle']);
   foreach ($roles as $rid => $name) {
     og_role_delete($rid);
   }
 }
+
+/**
+ * Implements hook_form_alter().
+ */
+function og_form_alter(&$form, $form_state, $form_id) {
+  if (empty($form['#entity_type']) && empty($form['#bundle'])) {
+    return;
+  }
+  $entity_type = $form['#entity_type'];
+  $bundle = $form['#bundle'];
+
+  if ($entity_type == 'user' || !og_is_group_type($entity_type, $bundle)) {
+    return;
+  }
+  $form['#validate'][] = 'og_form_group_manager_validate';
+}
+
+/**
+ * Validate handler; Make sure a group can be created.
+ *
+ * We check if the group manager has a matching group-audience field for the
+ * OG membership do be created in.
+ */
+function og_form_group_manager_validate($form, &$form_state) {
+  $entity_type = $form['#entity_type'];
+  $bundle = $form['#bundle'];
+  if (empty($form_state[$entity_type])) {
+    // We are inside field settings page.
+    return;
+  }
+  $entity = $form_state[$entity_type];
+  $langcode = $form_state['values']['language'];
+
+  if (!isset($form_state['values']['uid']) || !isset($entity->uid)) {
+    // There is no user ID property on the entity.
+    return;
+  }
+
+  if (isset($form_state['values'][OG_GROUP_FIELD]) && empty($form_state['values'][OG_GROUP_FIELD][$langcode][0]['value'])) {
+    // Not a group.
+    return;
+  }
+
+  if (!isset($form_state['values'][OG_GROUP_FIELD])) {
+    // Field doesn't appear in the form, so it is probably hidden by
+    // hook_field_access(). So check the default value of the field.
+    $field = field_info_field(OG_GROUP_FIELD);
+    $instance = field_info_instance($entity_type, OG_GROUP_FIELD, $bundle);
+
+    $items = field_get_default_value($entity_type, $entity, $field, $instance, $langcode);
+    if (empty($items[0]['value'])) {
+      // Default value is not a group.
+      return;
+    }
+  }
+
+  if ($entity_type == 'node') {
+    // A user might assign the node author by entering a user name in the
+    // node form, which we then need to translate to a user ID.
+    // However, this happens later on, in node_submit(), so we do a special
+    // check for the node entity.
+    if (!$account = user_load_by_name($form_state['values']['name'])) {
+      // Invalid username.
+      return;
+    }
+  }
+  else {
+    $account = user_load($form_state['values']['uid']);
+  }
+
+  list($id) = entity_extract_ids($entity_type, $entity);
+
+  if ($id && $entity->uid == $account->uid) {
+    // The entity's user ID hasn't changed.
+    return;
+  }
+
+  if ($access = og_get_best_group_audience_field('user', $account, $entity_type, $bundle)) {
+    // Matching group audience field found.
+    return;
+  }
+
+  form_error($form, t("Can't save entity as group, because user @name can't be subscribed to group and become a manager.", array('@name' => format_username($account))));
+}
+
 
 /**
  * Implements hook_field_attach_form().
@@ -668,17 +751,12 @@ function og_field_delete_instance($instance) {
  */
 function og_field_attach_form($entity_type, $entity, &$form, &$form_state, $langcode) {
   list($id,, $bundle_name) = entity_extract_ids($entity_type, $entity);
-  if (!$id) {
-    // New entity.
-    return;
-  }
-
   if (!og_is_group_content_type($entity_type, $bundle_name)) {
     return;
   }
 
   $wrapper = entity_metadata_wrapper($entity_type, $entity);
-  $has_secodary = FALSE;
+  $has_secondary = FALSE;
 
   // Get all the group-audience fields in the entity.
   foreach (og_get_group_audience_fields($entity_type, $bundle_name) as $field_name => $label) {
@@ -687,9 +765,12 @@ function og_field_attach_form($entity_type, $entity, &$form, &$form_state, $lang
     if (empty($field['settings']['handler_settings']['primary_field'])) {
       continue;
     }
-    $has_secodary = TRUE;
 
     $primary_field = $field['settings']['handler_settings']['primary_field'];
+    if (!isset($wrapper->$primary_field)) {
+      // Settings are referencing a non-existing field.
+      return;
+    }
     $primary_ids = $wrapper->$primary_field->value(array('identifier' => TRUE));
     if (!$primary_ids) {
       continue;
@@ -702,10 +783,12 @@ function og_field_attach_form($entity_type, $entity, &$form, &$form_state, $lang
       // value as integer, so turn it into an array.
       $primary_ids = array($primary_ids);
     }
-    $secondary_ids = entityreference_get_selection_handler($field)->validateReferencableEntities($primary_ids);
+    $instance = field_info_instance($entity_type, $field['field_name'], $bundle_name);
+    $secondary_ids = entityreference_get_selection_handler($field, $instance)->validateReferencableEntities($primary_ids);
     if (!$secondary_ids) {
       continue;
     }
+    $has_secondary = TRUE;
 
     // Rebuild the items array.
     $items = array();
@@ -715,21 +798,47 @@ function og_field_attach_form($entity_type, $entity, &$form, &$form_state, $lang
       );
     }
 
+    if (empty($form_state['field'][$field_name])) {
+      continue;
+    }
+
     $key = key($form_state['field'][$field_name]);
 
     // We don't use field_form_set_state() as we just want to change the items
     // count. We have to do it before calling field_default_form().
     $form_state['field'][$field_name][$key]['items_count'] = count($items);
 
-    $instance = $form_state['field'][$field_name][$key]['instance'];
     // Re-build the field, based on the injected values.
     $result = field_default_form($entity_type, $entity, $field, $instance, $key, $items, $form, $form_state, NULL);
     $form[$field_name] = $result[$field_name];
   }
-  if ($has_secodary) {
-    $form['#validate'][] = 'og_form_secondary_field_validate';
-  }
 
+  if ($has_secondary) {
+    $form['#validate'][] = 'og_form_secondary_field_validate';
+
+    if ($id && !field_access('edit', $field, $entity_type, $entity)) {
+      $group_type = $field['settings']['target_type'];
+      $gids = $primary_ids + $secondary_ids;
+      $hidden_gids = array();
+      foreach ($gids as $gid) {
+        if (in_array($gid, $secondary_ids)) {
+          $hidden_gids[] = array('target_id' => $gid);
+        }
+      }
+
+      if ($hidden_gids) {
+        $form[$field['field_name']][$langcode]['#element_validate'][] = 'og_form_keep_primary_field_validate';
+        $form[$field['field_name']][$langcode]['#hidden_gids'] = $hidden_gids;
+      }
+    }
+  }
+}
+
+/**
+ * Validate handler; Re-populate inaccessible values, to the secondary field.
+ */
+function og_form_keep_primary_field_validate($element, &$form_state) {
+  form_set_value($element, $element['#hidden_gids'], $form_state);
 }
 
 /**
@@ -742,6 +851,11 @@ function og_form_secondary_field_validate($form, &$form_state) {
   // Get an keyed with the primary field, and an arrayof secoadry fields as the
   // value.
   $entity_type = $form['#entity_type'];
+  if (empty($form_state[$entity_type])) {
+    // Entity info isn't in the $form_state (e.g. when admin creates a new
+    // user).
+    return;
+  }
   $entity = $form_state[$entity_type];
   $fields_info = array();
   foreach ($form_state['field'] as $field_name => $value) {
@@ -845,11 +959,8 @@ function og_entity_presave($entity, $entity_type) {
         else {
           $wrapper->{$primary_field}[] = $id;
         }
-
-        $delta = $primary_field_info['cardinality'] == 1 ? 0 : $wrapper->{$primary_field}->count();
       }
     }
-
 
     // Remove the values from the secondary field.
     $wrapper->{$field_name}->set(NULL);
@@ -877,7 +988,7 @@ function og_entity_insert($entity, $entity_type) {
   }
   if (!og_is_group_default_access($entity_type, $entity)) {
     // Override default roles.
-    og_roles_override($entity_type, $id, $bundle);
+    og_roles_override($entity_type, $bundle, $id);
   }
 }
 
@@ -907,7 +1018,7 @@ function og_entity_update($entity, $entity_type) {
   if (!empty($entity->{$property}) && $entity->{$property} != $origianl_entity->{$property}) {
     if (!og_is_group_default_access($entity_type, $entity)) {
       // Override default roles.
-      og_roles_override($entity_type, $id, $bundle);
+      og_roles_override($entity_type, $bundle, $id);
     }
     else {
       // Delete overridden roles.
@@ -917,16 +1028,69 @@ function og_entity_update($entity, $entity_type) {
 }
 
 /**
- * Implements hook_entity_delete().
+ * Implements hook_field_attach_insert().
  */
-function og_entity_delete($entity, $entity_type) {
-  if (!og_is_group($entity_type, $entity)) {
+function og_field_attach_insert($entity_type, $entity) {
+  _og_update_entity_fields($entity_type, $entity);
+}
+
+/**
+ * Implements hook_field_attach_update().
+ */
+function og_field_attach_update($entity_type, $entity) {
+  _og_update_entity_fields($entity_type, $entity);
+}
+
+/**
+ * Update the field values in the entity, to reflect the membership.
+ *
+ * This is used to allow other modules that save a new/ existing entity
+ * to act on the field values, even before hook_field_load() is called.
+ */
+function _og_update_entity_fields($entity_type, $entity) {
+  list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
+  if (!og_is_group_content_type($entity_type, $bundle)) {
     return;
   }
 
-  list($id) = entity_extract_ids($entity_type, $entity);
-  og_delete_user_roles_by_group($entity_type, $entity);
-  og_membership_delete_by_group($entity_type, $id);
+  $wrapper = entity_metadata_wrapper($entity_type, $entity);
+  foreach (og_get_group_audience_fields($entity_type, $bundle, FALSE) as $field_name => $label) {
+    $field = field_info_field($field_name);
+    $gids = array();
+    if ($field['cardinality'] == 1) {
+      if ($og_membership = $wrapper->{$field_name . '__og_membership'}->value()) {
+        // Wrapper return an array.
+        $gids = $og_membership[0]->gid;
+      }
+    }
+    else {
+      foreach ($wrapper->{$field_name . '__og_membership'}->value() as $og_membership) {
+        $gids[] = $og_membership->gid;
+      }
+    }
+    if ($gids) {
+      $wrapper->{$field_name}->set($gids);
+    }
+  }
+}
+
+
+/**
+ * Implements hook_entity_delete().
+ */
+function og_entity_delete($entity, $entity_type) {
+  list($id, , $bundle) = entity_extract_ids($entity_type, $entity);
+  if (og_is_group($entity_type, $entity)) {
+    og_delete_user_roles_by_group($entity_type, $entity);
+    og_membership_delete_by_group($entity_type, $id);
+  }
+  if (og_is_group_content_type($entity_type, $bundle)) {
+    // As the field attachers are called after hook_entity_presave() we
+    // can't delete the OG memberships here. So we just mark the entity
+    // as being deleted, and we will do the actual delete in
+    // OgBehaviorHandler::delete().
+    $entity->delete_og_membership = TRUE;
+  }
 }
 
 /**
@@ -1016,7 +1180,11 @@ function og_og_fields_info() {
     ),
     'instance' => array(
       'label' => t('Group roles and permissions'),
-      'widget_type' => 'options_select',
+      'widget' => array(
+        'module' => 'options',
+        'settings' => array(),
+        'type' => 'options_select',
+      ),
       'required' => TRUE,
       // Use default role and permissions as default value.
       'default_value' => array(0 => array('value' => 0)),
@@ -1112,12 +1280,16 @@ class OgMembershipType extends Entity {
  *   Returns a new OG membership type object.
  */
 function og_membership_type_create($name, $values = array()) {
+  global $language;
   // Make sure the message type doesn't already exist, to prevent duplicate key
   // error.
   if (og_membership_type_load($name)) {
     throw new OgException('Group membership type ' . check_plain($name) . ' already exists.');
   }
   $values['name'] = $name;
+  $values += array(
+    'language' => $language->language,
+  );
   $wrapper = entity_property_values_create_entity('og_membership_type', $values);
   return $wrapper->value();
 }
@@ -1229,7 +1401,7 @@ class OgMembership extends Entity {
     }
 
     if (!empty($field['settings']['handler_settings']['target_bundles']) && !in_array($group_bundle, $field['settings']['handler_settings']['target_bundles'])) {
-      throw new OgException(t('OG membership can not be created in entity %entity-type and bundle %entity-bundle using the field %field_name as the field does not reference %group-bundle bundle in %group-type entity type.', $params));
+      throw new OgException(t('OG membership can not be created in entity %entity-type and bundle %entity-bundle using the field %field-name as the field does not reference %group-bundle bundle in %group-type entity type.', $params));
     }
 
     $params += array('@cardinality' => $field['cardinality']);
@@ -1241,7 +1413,7 @@ class OgMembership extends Entity {
 
     // Check field is not a secondary field.
     if (!empty($field['settings']['handler_settings']['primary_field'])) {
-      throw new OgException(t('OG membership can not be created using the field %field_name as the field is defined as a secondary field.', $params));
+      throw new OgException(t('OG membership can not be created using the field %field-name as the field is defined as a secondary field.', $params));
     }
 
     if (empty($this->id) && $og_membership = og_get_membership($this->group_type, $this->gid, $this->entity_type, $this->etid)) {
@@ -1315,6 +1487,8 @@ function og_membership_invalidate_cache() {
  * @see entity_property_values_create_entity()
  */
 function og_membership_create($group_type, $gid, $entity_type, $etid, $field_name, $values = array()) {
+  global $language;
+
   $values += array(
     'group_type' => $group_type,
     'gid' => $gid,
@@ -1323,6 +1497,7 @@ function og_membership_create($group_type, $gid, $entity_type, $etid, $field_nam
     'state' => OG_STATE_ACTIVE,
     'created' => time(),
     'field_name' => $field_name,
+    'language' => $language->language,
   );
 
   if (!og_is_group_audience_field($field_name)) {
@@ -1504,9 +1679,7 @@ function og_invalidate_cache($gids = array()) {
   $caches = array(
     'og_user_access',
     'og_user_access_alter',
-    'og_field_audience_options',
     'og_role_permissions',
-    'og_field_formatter_view',
     'og_get_user_roles',
     'og_get_permissions',
     'og_get_group_audience_fields',
@@ -1527,6 +1700,10 @@ function og_invalidate_cache($gids = array()) {
  * Return all existing groups of an entity type.
  */
 function og_get_all_group($group_type = 'node') {
+  if (!field_info_field(OG_GROUP_FIELD)) {
+    return array();
+  }
+
   $query = new EntityFieldQuery();
   $return = $query
     ->entityCondition('entity_type', $group_type)
@@ -1540,13 +1717,20 @@ function og_get_all_group($group_type = 'node') {
  * Get the first best matching group-audience field.
  *
  * @param $entity_type
+ *   The entity type.
  * @param $entity
+ *   The entity object.
+ * @param $group_type
+ *   The group type.
+ * @param $group_bundle
+ *   The group bundle.
+ * @param $skip_access
+ *   TRUE, if current user access to the field, should be skipped.
+ *   Defaults to FALSE.
  */
-function og_get_best_group_audience_field($entity_type, $entity, $group_type, $group) {
+function og_get_best_group_audience_field($entity_type, $entity, $group_type, $group_bundle, $skip_access = FALSE) {
   $entity_wrapper = entity_metadata_wrapper($entity_type, $entity);
-  $group_wrapper = entity_metadata_wrapper($group_type, $group);
   $bundle = $entity_wrapper->getBundle();
-  $group_bundle = $group_wrapper->getBundle();
 
   $field_names = og_get_group_audience_fields($entity_type, $bundle);
   if (!$field_names) {
@@ -1573,10 +1757,11 @@ function og_get_best_group_audience_field($entity_type, $entity, $group_type, $g
       // Field reached maximum.
       continue;
     }
-    if (!$entity_wrapper->{$field_name}->access('view')) {
+    if (!$skip_access && !$entity_wrapper->{$field_name}->access('view')) {
       // User can't access field.
       continue;
     }
+
     return $field_name;
   }
 }
@@ -1621,7 +1806,7 @@ function og_check_field_cardinality($entity_type, $entity, $field_name) {
  *     will be used. If no field found, an execpetion will be thrown.
  *
  * @return
- *   The entity with the fields updated.
+ *   The OG membership entity.
  */
 function og_group($group_type, $gid, $values = array()) {
   // Set default values.
@@ -1644,6 +1829,8 @@ function og_group($group_type, $gid, $values = array()) {
   }
 
   $wrapper = entity_metadata_wrapper($entity_type, $entity);
+  // If entity was an ID, get the object.
+  $entity = $wrapper->value();
   $bundle = $wrapper->getBundle();
   $id = $wrapper->getIdentifier();
 
@@ -1661,7 +1848,8 @@ function og_group($group_type, $gid, $values = array()) {
       '%group-bundle' => $group_bundle,
     );
 
-    $field_name = og_get_best_group_audience_field($entity_type, $entity, $group_type, $group);
+    // Allow getting fields not accessible by the user.
+    $field_name = og_get_best_group_audience_field($entity_type, $entity, $group_type, $group_bundle, TRUE);
     if (!$field_name) {
       throw new OgException(t('There are no OG fields in entity %entity-type and bundle %bundle referencing %group-type - %group-bundle.', $params));
     }
@@ -1747,12 +1935,16 @@ function og_ungroup($group_type, $gid, $entity_type = 'user', $etid = NULL) {
  *   drupal_alter(). This can be used by modules implementing
  *   hook_og_user_access_alter() that still want to use og_user_access(), but
  *   without causing a recursion. Defaults to FALSE.
+ * @param $ignore_admin
+ *   When TRUE the specific permission is checked, ignoring the "administer
+ *   group" permission if the user has it. When FALSE, a user with "administer
+ *   group" will be granted all permissions. Defaults to FALSE.
  *
  * @return
  *   TRUE or FALSE if the current user has the requested permission. NULL, if
  *   the given group isn't a valid group.
  */
-function og_user_access($group_type, $gid, $string, $account = NULL, $skip_alter = FALSE) {
+function og_user_access($group_type, $gid, $string, $account = NULL, $skip_alter = FALSE, $ignore_admin = FALSE) {
   global $user;
   $perm = &drupal_static(__FUNCTION__, array());
   // Mark the group ID and permissions that invoked an alter.
@@ -1774,7 +1966,7 @@ function og_user_access($group_type, $gid, $string, $account = NULL, $skip_alter
   }
 
   // Administer group permission.
-  if (user_access('administer group', $account)) {
+  if (user_access('administer group', $account) && !$ignore_admin) {
     return TRUE;
   }
 
@@ -1805,7 +1997,12 @@ function og_user_access($group_type, $gid, $string, $account = NULL, $skip_alter
     // Let modules alter the permissions. since $perm is static we create a
     // clone of it.
     $temp_perm = $perm[$identifier][$account->uid];
-    $context = array('string' => $string, 'group_type' => $group_type, 'gid' => $gid, 'account' => $account);
+    $context = array(
+      'string' => $string,
+      'group_type' => $group_type,
+      'group' => $group,
+      'account' => $account,
+    );
     drupal_alter('og_user_access', $temp_perm, $context);
 
     // Re-assing the altered permissions.
@@ -1815,7 +2012,7 @@ function og_user_access($group_type, $gid, $string, $account = NULL, $skip_alter
     $perm_alter[$identifier][$account->uid][$string] = TRUE;
   }
 
-  return !empty($perm[$identifier][$account->uid][$string]) || !empty($perm[$identifier][$account->uid]['administer group']);
+  return !empty($perm[$identifier][$account->uid][$string]) || (!empty($perm[$identifier][$account->uid]['administer group']) && !$ignore_admin);
 }
 
 /**
@@ -1980,6 +2177,8 @@ function og_is_group_audience_field($field_name) {
  *   The entity type.
  * @param $bundle_name
  *   The bundle name to be checked.
+ * @param $include_secondary
+ *   TRUE, if secondary group-audience field should be also returned.
  *
  * @return
  *   Array keyed with the field name and the field label as the value.
@@ -2130,7 +2329,7 @@ function og_get_all_group_content_entity() {
  *
  * @return
  *   Array keyed with the entity type machine name and the entity human readable
- *   name as the value, or an empty array if no enteties are defined as group
+ *   name as the value, or an empty array if no entities are defined as group
  *   content.
  */
 function og_get_all_group_content_bundle() {
@@ -2234,6 +2433,10 @@ function og_role_permissions($roles = array()) {
 /**
  * Retrieve an array of roles matching specified conditions.
  *
+ * @param $group_type
+ *   The group type.
+ * @param $bundle
+ *   The bundle type.
  * @param $gid
  *   The group ID.
  * @param $force_group
@@ -2248,7 +2451,7 @@ function og_role_permissions($roles = array()) {
  *   value. The anonymous and authenticated default roles are on the top of the
  *   array.
  */
-function og_roles($group_type = '', $gid = 0, $bundle = '', $force_group = FALSE, $include_all = TRUE) {
+function og_roles($group_type, $bundle, $gid = 0, $force_group = FALSE, $include_all = TRUE) {
   if ($gid && !$bundle) {
     $wrapper = entity_metadata_wrapper($group_type, $gid);
     $bundle = $wrapper->getBundle();
@@ -2280,22 +2483,17 @@ function og_roles($group_type = '', $gid = 0, $bundle = '', $force_group = FALSE
 }
 
 /**
- * Get global roles - roles that belong to non-existent group ID 0.
+ * Get arary of default roles, keyed by their declaring module.
+ *
+ * @param $include
  *
  * @return
- *   A keyed array with role Id as key and role name as value.
- */
-function og_get_global_roles() {
-  return og_roles();
-}
-
-/**
- * Get arary of default roles, keyed by their declaring module.
+ *   Array of default roles, grouped by module name.
  */
 function og_get_default_roles($include = TRUE) {
   $roles = array();
   foreach (module_implements('og_default_roles') as $module) {
-    $roles[$module] = module_invoke($module, 'og_default_roles');
+    $roles += module_invoke($module, 'og_default_roles');
   }
 
   // Allow other modules to alter the defult roles, excpet of the anonymous and
@@ -2303,85 +2501,11 @@ function og_get_default_roles($include = TRUE) {
   drupal_alter('og_default_roles', $roles);
 
   if ($include) {
-    $roles += array('og' => array());
-    array_unshift($roles['og'], OG_ANONYMOUS_ROLE, OG_AUTHENTICATED_ROLE);
+    array_unshift($roles, OG_AUTHENTICATED_ROLE);
+    array_unshift($roles, OG_ANONYMOUS_ROLE);
   }
 
   return $roles;
-}
-
-/**
- * Add default roles and permissions of a module to the global permissions.
- *
- * This function is called whenever a module is enabled. Calling this function
- * directly will re-assign permissions to thier default roles.
- *
- * @param $module
- *   The module name.
- * @return
- *   Array with the global roles, as new records might have been added.
- */
-function og_set_global_access_by_module($module) {
-  $default_roles = og_get_default_roles();
-  if (!empty($default_roles[$module])) {
-    og_create_global_roles($default_roles[$module]);
-  }
-
-  $og_global_roles = og_get_global_roles();
-
-  // Add permissions to the roles.
-  $perms = array();
-  foreach (og_get_permissions() as $name => $perm) {
-    if (empty($perm['default role'])) {
-      continue;
-    }
-
-    foreach ($perm['default role'] as $key => $role) {
-      // Get the role ID by the role name.
-      $rid = array_search($role, $og_global_roles);
-      if (!$rid) {
-        continue;
-      }
-
-      $perms[$rid][] = $name;
-    }
-  }
-
-  if (!$perms) {
-    return;
-  }
-
-  foreach ($perms as $rid => $rid_perms) {
-    // Add the permissions to the OG role.
-    og_role_grant_permissions($rid, $rid_perms);
-  }
-
-}
-
-/**
- * Helper function; Create global OG roles if not existing already.
- *
- * @param $names
- *   Array with the role names.
- */
-function og_create_global_roles($names) {
-  foreach ($names as $name) {
-    // Check if role doesn't alreayd exist.
-    $count = db_select('og_role', 'ogr')
-      ->condition('gid', 0)
-      ->condition('group_type', '', '=')
-      ->condition('group_bundle', '', '=')
-      ->condition('name', $name)
-      ->countQuery()
-      ->execute()
-      ->fetchField();
-
-    if (!$count) {
-      // Create a new role.
-      $role = og_role_create($name);
-      og_role_save($role);
-    }
-  }
 }
 
 /**
@@ -2484,6 +2608,7 @@ function og_role_load($rid) {
     ->execute()
     ->fetchObject();
 }
+
 /**
  * Save a user role to the database.
  *
@@ -2550,7 +2675,7 @@ function og_role_delete($rid) {
 function og_delete_user_roles_by_group($group_type, $group) {
   // Check if group has overriden roles defined.
   list($gid, $vid,$bundle) = entity_extract_ids($group_type, $group);
-  if ($roles = og_roles($group_type, $gid, $bundle, TRUE)) {
+  if ($roles = og_roles($group_type, $bundle, $gid, TRUE)) {
     foreach ($roles as $rid => $name) {
       og_role_delete($rid);
     }
@@ -2587,29 +2712,33 @@ function og_permissions_delete_by_module($modules = array()) {
 /**
  * Create new roles, based on the default roles and permissions.
  *
+ * @param $group_type
+ *   The group type.
+ * @param $bundle
+ *   The bundle type.
  * @param $gid
  *   The group ID.
  * @return
  *   The newly created roles keyed by role ID and role name as the value. Or
  *   FALSE if no roles were created.
  */
-function og_roles_override($group_type, $gid, $bundle = NULL) {
+function og_roles_override($group_type, $bundle, $gid) {
   // Check if roles aren't already overriden. We can't use
   // og_is_group_default_access() as the field is already set, so we
   // check to see if there are new roles in the database by setting
   // "force group" parameter to TRUE.
-  if (og_roles($group_type, $gid, $bundle, TRUE)) {
+  if (og_roles($group_type, $bundle, $gid, TRUE)) {
     return;
   }
 
   $rids = array();
   if ($gid) {
-    $og_roles = og_roles($group_type, 0, $bundle);
+    $og_roles = og_roles($group_type, $bundle);
     $perms = og_role_permissions($og_roles);
   }
   else {
-    $og_roles = og_get_global_roles();
-    $perms = og_get_global_permissions();
+    $og_roles = og_get_default_roles();
+    $perms = og_get_default_permissions();
   }
 
   foreach ($og_roles as $rid => $name) {
@@ -2632,24 +2761,6 @@ function og_roles_override($group_type, $gid, $bundle = NULL) {
 }
 
 /**
- * Recreate permissions form global permissions.
- *
- * @param $group_type
- *   The group type.
- * @param $bundle
- *   The group bundle.
- */
-function og_recreate_permissions($group_type, $bundle) {
-  $perms = og_get_global_permissions();
-
-  foreach (og_roles($group_type, 0, $bundle) as $rid => $name) {
-    og_role_delete($rid);
-  }
-
-  og_roles_override($group_type, 0, $bundle);
-}
-
-/**
  * Grant a group role to a user.
  *
  * @param $uid
@@ -2661,7 +2772,7 @@ function og_role_grant($group_type, $gid, $uid, $rid) {
   // Make sure the role is valid.
   $group = entity_load_single($group_type, $gid);
   list(,, $bundle) = entity_extract_ids($group_type, $group);
-  $og_roles = og_roles($group_type, $gid, $bundle, FALSE, FALSE);
+  $og_roles = og_roles($group_type, $bundle, $gid, FALSE, FALSE);
   if (empty($og_roles[$rid])) {
     // Role isn't valid.
     return;
@@ -2831,16 +2942,28 @@ function og_get_permissions() {
 }
 
 /**
- * Get global permissions.
+ * Get default permissions.
  *
  * @return
  *   Array keyed with the anonymous, authenticated and administror and the
  *   permissions that should be enabled by default.
  */
-function og_get_global_permissions() {
-  $roles = og_get_global_roles();
+function og_get_default_permissions() {
+  $roles = og_get_default_roles();
+  $default_perms = og_get_permissions();
+  $perms = array();
 
-  $perms = og_role_permissions($roles);
+  foreach ($roles as $rid => $role_name) {
+    $perms[$rid] = array();
+    // For each default role, iterate default permissions and mark the
+    // permissions that set the role as default.
+    foreach ($default_perms as $perm_name => $perm) {
+      if (in_array($role_name, $perm['default role'])) {
+        $perms[$rid][$perm_name] = TRUE;
+      }
+    }
+  }
+
   return $perms;
 }
 
@@ -3034,9 +3157,16 @@ function og_node_create_links($group_type, $gid, $field_name, $destination = NUL
 
   $types = isset($types) ? $types : array_keys(node_type_get_types());
   foreach ($types as $type_name) {
-    if (og_is_group_content_type('node', $type_name) && node_access('create', $type_name)) {
-      $names[$type_name] = node_type_get_name($type_name);
+    if (!og_is_group_content_type('node', $type_name) || !node_access('create', $type_name)) {
+      continue;
     }
+
+    $instance = field_info_instance('node', $field_name, $type_name);
+    if (empty($instance['settings']['behaviors']['prepopulate']['status'])) {
+      // Instance doesn't allow prepopulating.
+      continue;
+    }
+    $names[$type_name] = node_type_get_name($type_name);
   }
 
   if (empty($names)) {

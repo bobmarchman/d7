@@ -9,8 +9,8 @@ class OgSelectionHandler extends EntityReference_SelectionHandler_Generic {
   /**
    * Implements EntityReferenceHandler::getInstance().
    */
-  public static function getInstance($field, $instance) {
-    return new OgSelectionHandler($field, $instance);
+  public static function getInstance($field, $instance = NULL, $entity_type = NULL, $entity = NULL) {
+    return new OgSelectionHandler($field, $instance, $entity_type, $entity);
   }
 
  /**
@@ -135,13 +135,21 @@ class OgSelectionHandler extends EntityReference_SelectionHandler_Generic {
    * Build an EntityFieldQuery to get referencable entities.
    */
   public function buildEntityFieldQuery($match = NULL, $match_operator = 'CONTAINS') {
-    $handler = EntityReference_SelectionHandler_Generic::getInstance($this->field, $this->instance);
+    global $user;
+
+    // TODO: Remove after Entityreference RC2.
+    $this->entity_type = !empty($this->entity_type) ? $this->entity_type : NULL;
+    $this->entity = !empty($this->entity) ? $this->entity : NULL;
+
+    $handler = EntityReference_SelectionHandler_Generic::getInstance($this->field, $this->instance, $this->entity_type, $this->entity);
     $query = $handler->buildEntityFieldQuery($match, $match_operator);
 
-    // The "node_access" tag causes errors, so we replace it with
-    // "entity_field_access" tag instead.
-    // @see _node_query_node_access_alter().
+    // FIXME: http://drupal.org/node/1325628
     unset($query->tags['node_access']);
+
+    // FIXME: drupal.org/node/1413108
+    unset($query->tags['entityreference']);
+
     $query->addTag('entity_field_access');
     $query->addTag('og');
 
@@ -157,17 +165,20 @@ class OgSelectionHandler extends EntityReference_SelectionHandler_Generic {
     // Show only the entities that are active groups.
     $query->fieldCondition(OG_GROUP_FIELD, 'value', 1, '=');
 
-
     $user_groups = og_get_groups_by_user(NULL, $group_type);
     $reference_type = $this->field['settings']['handler_settings']['reference_type'];
     // Show the user only the groups they belong to.
     if ($reference_type == 'my_groups') {
       if ($user_groups && !empty($this->instance) && $this->instance['entity_type'] == 'node') {
-        // Check if user has "create" permissions on those groups.
+        // Determine which groups should be selectable.
+        $node = $this->entity;
         $node_type = $this->instance['bundle'];
         $ids = array();
         foreach ($user_groups as $gid) {
-          if (og_user_access($group_type, $gid, "create $node_type content")) {
+          // Check if user has "create" permissions on those groups.
+          // If the user doesn't have create permission, check if perhaps the
+          // content already exists and the user has edit permission.
+          if (og_user_access($group_type, $gid, "create $node_type content") || !empty($node) && (og_user_access($group_type, $gid, "update any $node_type content") || ($user->uid == $node->uid && og_user_access($group_type, $gid, "update own $node_type content")))) {
             $ids[] = $gid;
           }
         }
@@ -186,8 +197,20 @@ class OgSelectionHandler extends EntityReference_SelectionHandler_Generic {
       }
     }
     elseif ($reference_type == 'other_groups' && $user_groups) {
-      // Show only group the user doesn't belong to.
-      $query->propertyCondition($entity_info['entity keys']['id'], $user_groups, 'NOT IN');
+      // Show only groups the user doesn't belong to.
+      if (!empty($this->instance) && $this->instance['entity_type'] == 'node') {
+        // Don't include the groups, the user doesn't have create
+        // permission.
+        $node_type = $this->instance['bundle'];
+        foreach ($user_groups as $delta => $gid) {
+          if (!og_user_access($group_type, $gid, "create $node_type content")) {
+            unset($user_groups[$delta]);
+          }
+        }
+      }
+      if ($user_groups) {
+        $query->propertyCondition($entity_info['entity keys']['id'], $user_groups, 'NOT IN');
+      }
     }
 
     return $query;

@@ -50,7 +50,7 @@ function og_context_entity_property_info() {
   $info = array();
 
   foreach (og_get_all_group_entity() as $entity_type => $label) {
-    $params = array('@type' => '@label');
+    $params = array('@label' => $label);
     $properties = &$info['site']['properties'];
     $properties['og_context__' . $entity_type] = array(
       'label' => t('Current OG group of @label entity type', $params),
@@ -111,13 +111,11 @@ function og_context_preprocess_html(&$variables) {
 function og_context_og_context_negotiation_info() {
   $providers = array();
 
-  if (module_exists('entityreference_prepopulate')) {
-    $providers['url'] = array(
-      'name' => t('URL (content create)'),
-      'description' => t("Select groups if they were passed in the node create URL (e.g. node/add/post?field_group_ref=4,5,6)."),
-      'callback' => 'og_context_handler_url',
-    );
-  }
+  $providers['url'] = array(
+    'name' => t('URL (content create)'),
+    'description' => t('Select groups if they were passed in the node create URL (e.g. node/add/post?field_group_ref=4,5,6). <em>Note: Depends on <a href="@url">Entity reference prepopulate</a> module, and enabling "Prepopulate" in the field settings.</em>', array('@url' => 'http://drupal.org/project/entityreference_prepopulate')),
+    'callback' => 'og_context_handler_url',
+  );
 
   $providers['node'] = array(
     'name' => t('Node'),
@@ -366,8 +364,16 @@ function og_context_determine_context($group_type, $item = NULL) {
  * Context handler; Get groups from node create URL.
  */
 function og_context_handler_url() {
+  if (!module_exists('entityreference_prepopulate')) {
+    return;
+  }
   $item = menu_get_item();
   if (strpos($item['path'], 'node/add/') !== 0) {
+    return;
+  }
+  if (empty($item['map'][2])) {
+    // If we don't have this key in the array, it means the user doesn't have
+    // access to create this node.
     return;
   }
   $node_type = $item['map'][2];
