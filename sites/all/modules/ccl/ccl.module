@@ -59,6 +59,35 @@ function ccl_menu() {
   return $items;
 }
 
+/**
+ * Implements hook_features_api().
+ */
+function ccl_features_api() {
+  return array(
+    'ccl' => array(
+      'name' => 'Custom Contextual Links',
+      'file' => drupal_get_path('module', 'ccl') . '/ccl.features.inc',
+      'default_hook' => 'ccl_features_preset',
+      'feature_source' => TRUE,
+    ),
+  );
+}
+
+function ccl_get_presets($title = NULL) {
+  $presets = array();
+  if ($title) {
+    $results = db_query('SELECT * FROM {ccl} WHERE title = :title;', array(':title' => $title));
+  }
+  else {
+    $results = db_query('SELECT * FROM {ccl};');
+  }
+
+  while ($result = $results->fetchObject()) {
+    $presets[] = $result;
+  }
+  return $presets;
+}
+
 /*
  * Implements hook_contextual_links_view_alter().
  *
@@ -122,21 +151,29 @@ function ccl_cache_get($type) {
  * Helper function for token replacement, destination and access control.
  */
 function _ccl_prepare_link($link, $destination, $node = NULL) {
-
-  // Token replacement for nodes
-  if ($node) {
-    $link['href'] = token_replace($link['href'], array('node' => $node));
-    $link['title'] = token_replace($link['title'], array('node' => $node));
-  }
-  // General token replacement.
-  else {
-    $link['href'] = token_replace($link['href']);
-    $link['title'] = token_replace($link['title']);
-  }
+  // Token replacement for the URL
+  $link['href'] = $node ? token_replace($link['href'], array('node' => $node)) : token_replace($link['href']);
 
   // Check the access permission
   if (drupal_valid_path($link['href'], TRUE)) {
-    $link['query'][] = $destination;
+    // Token replacement for the title
+    $link['title'] = $node ? token_replace($link['title'], array('node' => $node)) : token_replace($link['title']);
+
+    // Add classes if available
+    if (isset($link['advanced']['class'])) {
+      $link['attributes']['class'] = explode(" ", $link['advanced']['class']);
+    }
+
+    // Add query if available and destination
+    $link['query'] = $destination;
+    if (isset($link['advanced']['query']) && !empty($link['advanced']['query'])) {
+      $query = $node ? token_replace($link['advanced']['query'], array('node' => $node)) : token_replace($link['advanced']['query']);
+      $qparts = explode('&', $query);
+      foreach ($qparts as $value) {
+        $kv = explode('=', $value);
+        $link['query'][$kv[0]] = $kv[1];
+      }
+    }
     return $link;
   }
   else{
@@ -153,14 +190,22 @@ function _ccl_update_cache() {
   $node_cache = array('global' => array(), 'ct' => array(), 'ids' => array());
   foreach ($nodes as $node) {
     $node->options = unserialize($node->options);
+    $advanced = array();
+    if (isset($node->options['advanced_css'])) {
+      $advanced['class'] = $node->options['advanced_css'];
+    }
+    if (isset($node->options['advanced_query'])) {
+      $advanced['query'] = $node->options['advanced_query'];
+    }
+
     if ($node->options['node_options'] == 'global') {
-      $node_cache['global'][] = array('title' => $node->title, 'href' => $node->link);
+      $node_cache['global'][] = array('title' => $node->title, 'href' => $node->link, 'advanced' => $advanced);
     }
     elseif ($node->options['node_options'] == 'node') {
-      $node_cache['ids'][$node->options['node_id']][] = array('title' => $node->title, 'href' => $node->link);
+      $node_cache['ids'][$node->options['node_id']][] = array('title' => $node->title, 'href' => $node->link, 'advanced' => $advanced);
     }
     else{
-      $node_cache['ct'][$node->options['node_type']][] = array('title' => $node->title, 'href' => $node->link);
+      $node_cache['ct'][$node->options['node_type']][] = array('title' => $node->title, 'href' => $node->link, 'advanced' => $advanced);
     }
   }
   cache_set('ccl_nodes', $node_cache);
@@ -170,3 +215,7 @@ function _ccl_update_cache() {
     module_invoke($module, 'ccl_cache_update');
   }
 }
+
+// function ccl_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+//   dpm($data);
+// }

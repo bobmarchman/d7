@@ -127,14 +127,22 @@ function ccl_views_ccl_cache_update() {
   $view_cache = array('global' => array(), 'displays' => array(), 'views' => array());
   foreach ($views as $view) {
     $view->options = unserialize($view->options);
+    $advanced = array();
+    if (isset($view->options['advanced_css'])) {
+      $advanced['class'] = $view->options['advanced_css'];
+    }
+    if (isset($view->options['advanced_query'])) {
+      $advanced['query'] = $view->options['advanced_query'];
+    }
+
     if ($view->options['view_options'] == 0) {
-      $view_cache['global'][] = array('title' => $view->title, 'href' => $view->link);
+      $view_cache['global'][] = array('title' => $view->title, 'href' => $view->link, 'advanced' => $advanced);
     }
     elseif ($view->options['view_options'] == 2) {
-      $view_cache['displays'][$view->options['view_display']][] = array('title' => $view->title, 'href' => $view->link);
+      $view_cache['displays'][$view->options['view_display']][] = array('title' => $view->title, 'href' => $view->link, 'advanced' => $advanced);
     }
     elseif ($view->options['view_options'] == 1) {
-      $view_cache['views'][$view->options['view_view']][] = array('title' => $view->title, 'href' => $view->link);
+      $view_cache['views'][$view->options['view_view']][] = array('title' => $view->title, 'href' => $view->link, 'advanced' => $advanced);
     }
   }
   cache_set('ccl_view', $view_cache);
@@ -150,20 +158,25 @@ function _ccl_views_get_info() {
   if (empty($view_info)) {
     $views = views_get_applicable_views('handler');
     if ($views) {
-    foreach ($views as $key => $view) {
-      $view['name'] = $view[0]->name;
-      $view['id'] = $view[1];
-      $view['human_name'] = $view[0]->human_name;
-      $view['display_title'] = $view[0]->display[$view[1]]->display_title;
-      $view['vdid'] = "{$view['name']}|{$view['id']}";
-      $view['vid'] = $view['name'];
-      $view['result_display'] = (empty($view['human_name']) ? $view['name'] : $view['human_name']) . " - {$view['display_title']} [{$view['id']}]";
-      $view['result_view'] = empty($view['human_name']) ? $view['name'] : $view['human_name'];
-      $view_info['options'] = 0;
-      $view_info['displays'][$view['vdid']] = $view['result_display'];
-      $view_info['views'][$view['vid']] = $view['result_view'];
+      foreach ($views as $key => $view) {
+        $view['name'] = $view[0]->name;
+        $view['id'] = $view[1];
+        $view['human_name'] = $view[0]->human_name;
+        $view['display_title'] = $view[0]->display[$view[1]]->display_title;
+        $view['vdid'] = "{$view['name']}|{$view['id']}";
+        $view['vid'] = $view['name'];
+        $view['result_display'] = (empty($view['human_name']) ? $view['name'] : $view['human_name']) . " - {$view['display_title']} [{$view['id']}]";
+        $view['result_view'] = empty($view['human_name']) ? $view['name'] : $view['human_name'];
+        $view_info['options'] = 0;
+        $view_info['displays'][$view['vdid']] = $view['result_display'];
+        $view_info['views'][$view['vid']] = $view['result_view'];
+      }
+      cache_set('ccl_view_info', $view_info);
     }
-    cache_set('ccl_view_info', $view_info);
+    // Catch if no views have been created yet.
+    else {
+      $view_info['displays'] = array();
+      $view_info['views'] = array();
     }
   }
 

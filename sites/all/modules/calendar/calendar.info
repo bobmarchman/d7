@@ -11,16 +11,14 @@ files[] = calendar.install
 files[] = calendar.module
 files[] = includes/calendar.views.inc
 files[] = includes/calendar_plugin_style.inc
-files[] = includes/calendar_plugin_row_node.inc
 files[] = includes/calendar_plugin_row.inc
 files[] = includes/calendar.views_template.inc
 files[] = theme/theme.inc
 files[] = theme/calendar-style.tpl.php
-files[] = theme/calendar-row-node.tpl.php
 
-; Information added by drupal.org packaging script on 2012-05-14
-version = "7.x-3.3+2-dev"
+; Information added by drupal.org packaging script on 2012-05-20
+version = "7.x-3.4+0-dev"
 core = "7.x"
 project = "calendar"
-datestamp = "1336953925"
+datestamp = "1337472623"
 

@@ -129,6 +129,29 @@ function ccl_add_form($form, &$form_state, $clid = 0) {
     '#required' => TRUE
   );
 
+  $form['link_group']['advanced'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Advanced Options'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $form['link_group']['advanced']['advanced_css'] = array(
+    '#type' => 'textfield',
+    '#title' => t('CSS Class'),
+    '#default_value' => ($clid && isset($link->options['advanced_css'])) ? $link->options['advanced_css'] : '',
+    '#description' => t('Add class name(s) to the link. Multiple classes should be seperated by a space. Example: "%example".', array('%example' => "colorbox-load extra-class")),
+    '#size' => 40,
+    '#maxlength' => 255,
+  );
+  $form['link_group']['advanced']['advanced_query'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Query String'),
+    '#default_value' => ($clid && isset($link->options['advanced_query'])) ? $link->options['advanced_query'] : '',
+    '#description' => t('Append a query string to the end of the link. Do not use the "?" at the beginning of the query. Tokens can be used for this field as well.<br />Example: "%example".', array('%example' => "width=500&height=500&iframe=true&user=[current-user:uid]")),
+    '#size' => 40,
+    '#maxlength' => 255,
+  );
+
   $form['link_group']['token_group'] = array(
     '#type' => 'fieldset',
     '#title' => t('Tokens'),

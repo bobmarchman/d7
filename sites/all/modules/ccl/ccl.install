@@ -15,6 +15,7 @@ function ccl_schema() {
         'description' => 'The primary identifier for a link.',
         'type' => 'serial',
         'unsigned' => TRUE,
+        'no export' => TRUE,
         'not null' => TRUE
       ),
       'type' => array(

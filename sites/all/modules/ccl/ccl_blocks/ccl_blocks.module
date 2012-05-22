@@ -98,11 +98,19 @@ function ccl_blocks_ccl_cache_update() {
   $block_cache = array('global' => array(), 'ids' => array());
   foreach ($blocks as $block) {
     $block->options = unserialize($block->options);
+    $advanced = array();
+    if (isset($block->options['advanced_css'])) {
+      $advanced['class'] = $block->options['advanced_css'];
+    }
+    if (isset($block->options['advanced_query'])) {
+      $advanced['query'] = $block->options['advanced_query'];
+    }
+
     if ($block->options['block_global']) {
-      $block_cache['global'][] = array('title' => $block->title, 'href' => $block->link);
+      $block_cache['global'][] = array('title' => $block->title, 'href' => $block->link, 'advanced' => $advanced);
     }
     else {
-      $block_cache['ids'][$block->options['block_select']][] = array('title' => $block->title, 'href' => $block->link);
+      $block_cache['ids'][$block->options['block_select']][] = array('title' => $block->title, 'href' => $block->link, 'advanced' => $advanced);
     }
   }
   cache_set('ccl_blocks', $block_cache);

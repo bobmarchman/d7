@@ -301,14 +301,25 @@ class view extends views_db_object {
    */
   function set_current_page($page) {
     $this->current_page = $page;
+
+    // If the pager is already initialized, pass it through to the pager.
+    if (!empty($this->query->pager)) {
+      return $this->query->pager->set_current_page($page);
+    }
+
   }
 
   /**
    * Get the current page from the pager.
    */
   function get_current_page() {
+    // If the pager is already initialized, pass it through to the pager.
     if (!empty($this->query->pager)) {
       return $this->query->pager->get_current_page();
+    }
+
+    if (isset($this->current_page)) {
+      return $this->current_page;
     }
   }
 
@@ -316,8 +327,13 @@ class view extends views_db_object {
    * Get the items per page from the pager.
    */
   function get_items_per_page() {
+    // If the pager is already initialized, pass it through to the pager.
     if (!empty($this->query->pager)) {
       return $this->query->pager->get_items_per_page();
+    }
+
+    if (isset($this->items_per_page)) {
+      return $this->items_per_page;
     }
   }
 
@@ -337,8 +353,13 @@ class view extends views_db_object {
    * Get the pager offset from the pager.
    */
   function get_offset() {
+    // If the pager is already initialized, pass it through to the pager.
     if (!empty($this->query->pager)) {
       return $this->query->pager->get_offset();
+    }
+
+    if (isset($this->offset)) {
+      return $this->offset;
     }
   }
 
@@ -1036,6 +1057,10 @@ class view extends views_db_object {
 
   /**
    * Internal method to build an individual set of handlers.
+   *
+   * @param string $key
+   *    The type of handlers (filter etc.) which should be iterated over to
+   *    build the relationship and query information.
    */
   function _build($key) {
     $handlers = &$this->$key;
@@ -1057,6 +1082,13 @@ class view extends views_db_object {
 
   /**
    * Execute the view's query.
+   *
+   * @param string $display_id
+   *   The machine name of the display, which should be executed.
+   *
+   * @return bool
+   *   Return whether the executing was successful, for example an argument
+   *   could stop the process.
    */
   function execute($display_id = NULL) {
     if (empty($this->built)) {
@@ -1113,7 +1145,16 @@ class view extends views_db_object {
   }
 
   /**
-   * Render this view for display.
+   * Render this view for a certain display.
+   *
+   * Note: You should better use just the preview function if you want to
+   * render a view.
+   *
+   * @param string $display_id
+   *   The machine name of the display, which should be rendered.
+   *
+   * @return (string|NULL)
+   *   Return the output of the rendered view or NULL if something failed in the process.
    */
   function render($display_id = NULL) {
     $this->execute($display_id);
@@ -1227,7 +1268,19 @@ class view extends views_db_object {
   }
 
   /**
-   * Render a specific field via the field ID and the row #.
+   * Render a specific field via the field ID and the row #
+   *
+   * Note: You might want to use views_plugin_style::render_fields as it
+   * caches the output for you.
+   *
+   * @param string $field
+   *   The id of the field to be rendered.
+   *
+   * @param int $row
+   *   The row number in the $view->result which is used for the rendering.
+   *
+   * @return string
+   *   The rendered output of the field.
    */
   function render_field($field, $row) {
     if (isset($this->field[$field]) && isset($this->result[$row])) {
@@ -1590,7 +1643,7 @@ class view extends views_db_object {
           $title = t('Home');
         }
         if ($title) {
-          $breadcrumb[] = l($title, $path, array('html' => true));
+          $breadcrumb[] = l($title, $path, array('html' => TRUE));
         }
       }
 
@@ -1931,7 +1984,7 @@ class view extends views_db_object {
       unset($this->query);
     }
 
-    $keys = array('current_display', 'display_handler', 'build_info', 'built', 'executed', 'attachment_before', 'attachment_after', 'field', 'argument', 'filter', 'sort', 'relationship', 'header', 'footer', 'empty', 'query', 'result', 'inited', 'style_plugin', 'plugin_name', 'exposed_data', 'exposed_input', 'many_to_one_tables');
+    $keys = array('current_display', 'display_handler', 'build_info', 'built', 'executed', 'attachment_before', 'attachment_after', 'field', 'argument', 'filter', 'sort', 'relationship', 'header', 'footer', 'empty', 'query', 'result', 'inited', 'style_plugin', 'plugin_name', 'exposed_data', 'exposed_input', 'many_to_one_tables', 'items_per_page', 'offset', 'current_page');
     foreach ($keys as $key) {
       if (isset($this->$key)) {
         unset($this->$key);

@@ -6,7 +6,7 @@
 function ccl_actions_menu() {
 
   $items['admin/config/user-interface/ccl/action/add'] = array(
-    'title' => 'Add new action link',
+    'title' => 'Add new node action link',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('ccl_actions_form'),
     'access arguments' =>  array('use ccl'),
@@ -64,7 +64,7 @@ function ccl_actions_form($form, &$form_state, $clid = 0) {
 
   $form['action_group'] = array(
     '#type' => 'fieldset',
-    '#title' => t('Actions'),
+    '#title' => t('Node Actions'),
     '#collapsible' => TRUE,
   );
 
